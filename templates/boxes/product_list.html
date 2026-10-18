@@ -1,0 +1,50 @@
+{% extends 'boxes/base.html' %}
+
+{% block title %}Products Catalog{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="h3 fw-bold mb-1">Ecommerce Products Catalog</h2>
+        <p class="text-muted mb-0">Physical specifications (dimensions and weights) used for 3D box packing calculations.</p>
+    </div>
+    <a href="/admin/boxes/product/add/" target="_blank" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-plus-lg me-1"></i> Add Product in Admin
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Product Name</th>
+                    <th>SKU</th>
+                    <th>Dimensions (LxWxH)</th>
+                    <th>Volume</th>
+                    <th>Unit Weight</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr>
+                    <td class="fw-semibold">{{ product.name }}</td>
+                    <td><code>{{ product.sku }}</code></td>
+                    <td>{{ product.length }} x {{ product.width }} x {{ product.height }} cm</td>
+                    <td>{{ product.volume|floatformat:1 }} cm³</td>
+                    <td><span class="badge bg-light text-dark border">{{ product.weight }} kg</span></td>
+                    <td class="text-muted small">{{ product.description|truncatewords:10 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-muted">
+                        No products found in catalog.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

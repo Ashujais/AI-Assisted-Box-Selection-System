@@ -1,0 +1,210 @@
+{% extends 'boxes/base.html' %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="h3 fw-bold mb-1">Warehouse Packaging Dashboard</h2>
+        <p class="text-muted mb-0">Automated 3D box selection, cost optimization, and real-time packing analytics.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'boxes:recommender' %}" class="btn btn-primary d-flex align-items-center gap-2">
+            <i class="bi bi-magic"></i> Interactive Box Recommender
+        </a>
+    </div>
+</div>
+
+<!-- Metrics Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small fw-medium">Active Box Types</span>
+                    <h3 class="fw-bold mt-1 mb-0">{{ total_boxes }}</h3>
+                </div>
+                <div class="bg-primary bg-opacity-10 text-primary p-3 rounded-circle">
+                    <i class="bi bi-boxes fs-4"></i>
+                </div>
+            </div>
+            <div class="mt-2 text-muted small">Standard warehouse box catalog</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-purple p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small fw-medium">Catalog Products</span>
+                    <h3 class="fw-bold mt-1 mb-0">{{ total_products }}</h3>
+                </div>
+                <div class="bg-purple bg-opacity-10 text-purple p-3 rounded-circle" style="color: #8b5cf6;">
+                    <i class="bi bi-tags fs-4"></i>
+                </div>
+            </div>
+            <div class="mt-2 text-muted small">Products with dimensions & weight</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-amber p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small fw-medium">Orders Pending Packing</span>
+                    <h3 class="fw-bold mt-1 mb-0">{{ pending_orders }}</h3>
+                </div>
+                <div class="bg-warning bg-opacity-10 text-warning p-3 rounded-circle">
+                    <i class="bi bi-clock-history fs-4"></i>
+                </div>
+            </div>
+            <div class="mt-2 text-muted small">Awaiting box confirmation / packing</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-green p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small fw-medium">Packed Orders</span>
+                    <h3 class="fw-bold mt-1 mb-0">{{ packed_orders }}</h3>
+                </div>
+                <div class="bg-success bg-opacity-10 text-success p-3 rounded-circle">
+                    <i class="bi bi-check2-circle fs-4"></i>
+                </div>
+            </div>
+            <div class="mt-2 text-muted small">Ready for warehouse dispatch</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Recent Orders Table -->
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="d-flex align-items-center gap-2">
+                    <i class="bi bi-cart3 text-primary"></i> Recent Customer Orders
+                </span>
+                <a href="{% url 'boxes:order_list' %}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Order #</th>
+                            <th>Customer</th>
+                            <th>Items</th>
+                            <th>Total Weight</th>
+                            <th>Recommended Box</th>
+                            <th>Fit Status</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in recent_orders %}
+                        <tr>
+                            <td class="fw-semibold">
+                                <a href="{% url 'boxes:order_detail' order.pk %}" class="text-decoration-none">
+                                    {{ order.order_number }}
+                                </a>
+                            </td>
+                            <td>{{ order.customer_name }}</td>
+                            <td>{{ order.total_quantity }}</td>
+                            <td>{{ order.total_weight|floatformat:2 }} kg</td>
+                            <td>
+                                {% if order.recommended_box %}
+                                    <span class="badge bg-light text-dark border">
+                                        <i class="bi bi-box me-1"></i> {{ order.recommended_box.name }}
+                                        <span class="text-success fw-bold ms-1">${{ order.recommended_box.cost }}</span>
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted small">Not recommended</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if order.box_fit_status == 'OPTIMAL_FIT' %}
+                                    <span class="badge badge-optimal">Optimal Fit</span>
+                                {% elif order.box_fit_status == 'MULTI_BOX_NEEDED' %}
+                                    <span class="badge bg-warning text-dark">Multi-Box</span>
+                                {% elif order.box_fit_status == 'NO_FIT' %}
+                                    <span class="badge badge-rejected">No Fit</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ order.box_fit_status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'boxes:order_detail' order.pk %}" class="btn btn-sm btn-outline-secondary">
+                                    Pack Order
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                No orders found. Run <code>python manage.py seed_data</code> to seed test orders.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Packing Logs / Live Audit -->
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-activity text-info"></i> Recent Packing Engine Decisions
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for log in recent_logs %}
+                    <div class="list-group-item p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-semibold small">
+                                {% if log.order %}
+                                    Order #{{ log.order.order_number }}
+                                {% else %}
+                                    Ad-hoc Request
+                                {% endif %}
+                            </span>
+                            <span class="text-muted" style="font-size: 0.75rem;">
+                                {{ log.created_at|timesince }} ago
+                            </span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            {% if log.success %}
+                                <span class="badge badge-optimal">Fit Found</span>
+                                <span class="small text-truncate">{{ log.recommended_box.name }}</span>
+                            {% else %}
+                                <span class="badge badge-rejected">No Fit</span>
+                                <span class="small text-muted">Exceeded capacities</span>
+                            {% endif %}
+                        </div>
+                        {% if log.success %}
+                        <div class="small text-muted mb-1 d-flex justify-content-between">
+                            <span>Vol Utilization:</span>
+                            <span class="fw-semibold text-dark">{{ log.volume_utilization_percent|floatformat:1 }}%</span>
+                        </div>
+                        <div class="progress mb-2">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: {{ log.volume_utilization_percent }}%"></div>
+                        </div>
+                        <div class="small text-muted d-flex justify-content-between">
+                            <span>Weight Utilization:</span>
+                            <span class="fw-semibold text-dark">{{ log.weight_utilization_percent|floatformat:1 }}%</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-info" role="progressbar" style="width: {{ log.weight_utilization_percent }}%"></div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <div class="p-4 text-center text-muted small">
+                        No recommendation logs recorded yet.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

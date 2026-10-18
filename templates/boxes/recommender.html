@@ -1,0 +1,572 @@
+{% extends 'boxes/base.html' %}
+
+{% block title %}Interactive Box Recommender{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="h3 fw-bold mb-1">Interactive Box Recommender Sandbox</h2>
+        <p class="text-muted mb-0">Test 3D bin packing calculations on custom items or catalog products in real-time.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary btn-sm" onclick="loadSamplePreset('electronics')">
+            <i class="bi bi-laptop me-1"></i> Preset: Electronics Bundle
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="loadSamplePreset('heavy')">
+            <i class="bi bi-hammer me-1"></i> Preset: Heavy Fitness
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="loadSamplePreset('long')">
+            <i class="bi bi-arrow-left-right me-1"></i> Preset: Long Art Tube
+        </button>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left: Items Builder Form -->
+    <div class="col-lg-6">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-box-arrow-in-down me-1 text-primary"></i> Order Items to Pack</span>
+                <div class="d-flex gap-2">
+                    <select id="quickProductSelect" class="form-select form-select-sm" style="width: auto;" onchange="addProductFromCatalog()">
+                        <option value="">+ Add from Catalog...</option>
+                        {% for p in products %}
+                            <option value="{{ p.id }}" data-name="{{ p.name }}" data-sku="{{ p.sku }}" data-length="{{ p.length }}" data-width="{{ p.width }}" data-height="{{ p.height }}" data-weight="{{ p.weight }}">
+                                {{ p.name }} ({{ p.length }}x{{ p.width }}x{{ p.height }}cm, {{ p.weight }}kg)
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItemRow()">
+                        <i class="bi bi-plus-lg"></i> Custom Row
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="itemsTable">
+                        <thead class="table-light small">
+                            <tr>
+                                <th>Item Name</th>
+                                <th style="width: 80px;">L (cm)</th>
+                                <th style="width: 80px;">W (cm)</th>
+                                <th style="width: 80px;">H (cm)</th>
+                                <th style="width: 90px;">Wt (kg)</th>
+                                <th style="width: 70px;">Qty</th>
+                                <th style="width: 40px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="itemsTableBody">
+                            <!-- Populated dynamically via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-light d-flex justify-content-between align-items-center p-3">
+                <div id="itemsSummaryText" class="small text-muted fw-semibold">0 items</div>
+                <button type="button" class="btn btn-primary d-flex align-items-center gap-2" id="calcBtn" onclick="calculateRecommendation()">
+                    <i class="bi bi-cpu"></i> Calculate Optimal Box
+                </button>
+            </div>
+        </div>
+
+        <!-- Available Warehouse Boxes Reference -->
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <i class="bi bi-boxes me-1 text-secondary"></i> Active Warehouse Shipping Boxes
+            </div>
+            <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                <table class="table table-sm table-hover align-middle small mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Box Name</th>
+                            <th>Code</th>
+                            <th>Dimensions (LxWxH)</th>
+                            <th>Max Wt</th>
+                            <th>Cost</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for b in boxes %}
+                        <tr>
+                            <td class="fw-semibold">{{ b.name }}</td>
+                            <td><code>{{ b.code }}</code></td>
+                            <td>{{ b.length }}x{{ b.width }}x{{ b.height }} cm</td>
+                            <td>{{ b.max_weight }} kg</td>
+                            <td class="text-success fw-bold">${{ b.cost }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Real-time Recommendation Result & 3D Visualization -->
+    <div class="col-lg-6">
+        <div id="placeholderResult" class="card shadow-sm p-5 text-center text-muted">
+            <i class="bi bi-box-seam display-3 mb-3 text-secondary opacity-50"></i>
+            <h5>Awaiting Calculation</h5>
+            <p class="small mb-0">Add items to the table on the left and click <strong>Calculate Optimal Box</strong>.</p>
+        </div>
+
+        <div id="recommendationResultCard" class="card shadow-sm mb-4 border-primary d-none">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <span class="d-flex align-items-center gap-2">
+                    <i class="bi bi-stars"></i> Optimal Packaging Solution
+                </span>
+                <span class="badge bg-light text-primary fw-bold" id="recBadgeStatus">Optimal Fit</span>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h4 class="h5 fw-bold text-dark mb-1" id="recBoxName">-</h4>
+                        <div class="text-muted small" id="recBoxDetails">-</div>
+                    </div>
+                    <div>
+                        <span class="badge bg-success fs-6 px-3 py-2" id="recBoxCost">$0.00</span>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-6">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <div class="text-muted small fw-medium mb-1">Volume Utilization</div>
+                            <div class="h5 fw-bold mb-2" id="recVolUtilText">0.0%</div>
+                            <div class="progress">
+                                <div class="progress-bar bg-primary" id="recVolUtilBar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <div class="text-muted small fw-medium mb-1">Weight Utilization</div>
+                            <div class="h5 fw-bold mb-2" id="recWtUtilText">0.0%</div>
+                            <div class="progress">
+                                <div class="progress-bar bg-info" id="recWtUtilBar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3D Packing Visualizer Canvas -->
+                <div class="mb-3">
+                    <h6 class="fw-semibold text-muted small text-uppercase mb-2">
+                        <i class="bi bi-box me-1"></i> 3D Spatial Layout Visualization
+                    </h6>
+                    <div class="border rounded-3 p-3 bg-white text-center">
+                        <canvas id="interactiveCanvas" width="480" height="260" style="max-width: 100%; height: auto;"></canvas>
+                        <div class="text-muted small mt-2" id="canvasCaption">
+                            Isometric placement layout of items inside box
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Candidates Table -->
+                <div>
+                    <h6 class="fw-semibold text-muted small text-uppercase mb-2">
+                        <i class="bi bi-list-check me-1"></i> Candidate Box Decisions
+                    </h6>
+                    <div class="table-responsive" style="max-height: 240px; overflow-y: auto;">
+                        <table class="table table-sm table-hover align-middle small mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Box Name</th>
+                                    <th>Cost</th>
+                                    <th>Decision</th>
+                                </tr>
+                            </thead>
+                            <tbody id="candidatesTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Multi-box plan card (if applicable) -->
+        <div id="multiBoxResultCard" class="card shadow-sm mb-4 border-warning d-none">
+            <div class="card-header bg-warning text-dark fw-bold">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i> Multi-Box Shipment Plan
+            </div>
+            <div class="card-body" id="multiBoxPlanBody">
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let itemsList = [];
+
+    function addItemRow(data = {}) {
+        const item = {
+            id: Date.now() + Math.random(),
+            name: data.name || 'Sample Item',
+            length: data.length || 20,
+            width: data.width || 15,
+            height: data.height || 10,
+            weight: data.weight || 0.5,
+            quantity: data.quantity || 1,
+            sku: data.sku || ''
+        };
+        itemsList.push(item);
+        renderTable();
+    }
+
+    function removeItemRow(id) {
+        itemsList = itemsList.filter(it => it.id !== id);
+        renderTable();
+    }
+
+    function updateItemField(id, field, value) {
+        const item = itemsList.find(it => it.id === id);
+        if (item) {
+            item[field] = (field === 'name' || field === 'sku') ? value : parseFloat(value) || 0;
+            updateSummary();
+        }
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('itemsTableBody');
+        tbody.innerHTML = '';
+
+        itemsList.forEach((it, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <input type="text" class="form-control form-control-sm" value="${it.name}" onchange="updateItemField(${it.id}, 'name', this.value)">
+                </td>
+                <td>
+                    <input type="number" step="0.1" class="form-control form-control-sm" value="${it.length}" onchange="updateItemField(${it.id}, 'length', this.value)">
+                </td>
+                <td>
+                    <input type="number" step="0.1" class="form-control form-control-sm" value="${it.width}" onchange="updateItemField(${it.id}, 'width', this.value)">
+                </td>
+                <td>
+                    <input type="number" step="0.1" class="form-control form-control-sm" value="${it.height}" onchange="updateItemField(${it.id}, 'height', this.value)">
+                </td>
+                <td>
+                    <input type="number" step="0.01" class="form-control form-control-sm" value="${it.weight}" onchange="updateItemField(${it.id}, 'weight', this.value)">
+                </td>
+                <td>
+                    <input type="number" min="1" class="form-control form-control-sm" value="${it.quantity}" onchange="updateItemField(${it.id}, 'quantity', this.value)">
+                </td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-link text-danger p-0" onclick="removeItemRow(${it.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        updateSummary();
+    }
+
+    function updateSummary() {
+        const totalQty = itemsList.reduce((sum, it) => sum + (parseInt(it.quantity) || 1), 0);
+        const totalWt = itemsList.reduce((sum, it) => sum + ((parseFloat(it.weight) || 0) * (parseInt(it.quantity) || 1)), 0);
+        const totalVol = itemsList.reduce((sum, it) => sum + ((parseFloat(it.length) || 0) * (parseFloat(it.width) || 0) * (parseFloat(it.height) || 0) * (parseInt(it.quantity) || 1)), 0);
+
+        document.getElementById('itemsSummaryText').textContent =
+            `${totalQty} item(s) &bull; ${totalWt.toFixed(2)} kg &bull; ${totalVol.toFixed(0)} cm³`;
+    }
+
+    function addProductFromCatalog() {
+        const select = document.getElementById('quickProductSelect');
+        const opt = select.selectedOptions[0];
+        if (!opt || !opt.value) return;
+
+        addItemRow({
+            name: opt.getAttribute('data-name'),
+            sku: opt.getAttribute('data-sku'),
+            length: parseFloat(opt.getAttribute('data-length')),
+            width: parseFloat(opt.getAttribute('data-width')),
+            height: parseFloat(opt.getAttribute('data-height')),
+            weight: parseFloat(opt.getAttribute('data-weight')),
+            quantity: 1
+        });
+
+        select.value = '';
+    }
+
+    function loadSamplePreset(presetType) {
+        itemsList = [];
+        if (presetType === 'electronics') {
+            addItemRow({ name: 'Mechanical Keyboard', length: 44, width: 14, height: 4, weight: 1.15, quantity: 1 });
+            addItemRow({ name: 'Gaming Mouse', length: 13, width: 7.5, height: 4.5, weight: 0.12, quantity: 1 });
+            addItemRow({ name: 'Wireless Headphones', length: 20, width: 15, height: 8, weight: 0.45, quantity: 1 });
+        } else if (presetType === 'heavy') {
+            addItemRow({ name: 'Cast Iron Kettlebell 16kg', length: 22, width: 20, height: 26, weight: 16.0, quantity: 1 });
+            addItemRow({ name: 'Steel Bottle 1L', length: 27, width: 8.5, height: 8.5, weight: 0.48, quantity: 1 });
+        } else if (presetType === 'long') {
+            addItemRow({ name: 'Architectural Blueprint Poster', length: 75, width: 8, height: 8, weight: 0.32, quantity: 1 });
+            addItemRow({ name: 'Gaming Mouse', length: 13, width: 7.5, height: 4.5, weight: 0.12, quantity: 1 });
+        }
+        calculateRecommendation();
+    }
+
+    async function calculateRecommendation() {
+        if (itemsList.length === 0) {
+            alert('Please add at least one item.');
+            return;
+        }
+
+        const calcBtn = document.getElementById('calcBtn');
+        calcBtn.disabled = true;
+        calcBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Packing...';
+
+        try {
+            const payload = {
+                items: itemsList.map(it => ({
+                    name: it.name,
+                    sku: it.sku || '',
+                    length: parseFloat(it.length),
+                    width: parseFloat(it.width),
+                    height: parseFloat(it.height),
+                    weight: parseFloat(it.weight),
+                    quantity: parseInt(it.quantity) || 1
+                }))
+            };
+
+            const resp = await fetch('/api/recommend/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await resp.json();
+            displayRecommendation(data);
+        } catch (err) {
+            console.error(err);
+            alert('Error running recommendation: ' + err);
+        } finally {
+            calcBtn.disabled = false;
+            calcBtn.innerHTML = '<i class="bi bi-cpu"></i> Calculate Optimal Box';
+        }
+    }
+
+    function displayRecommendation(data) {
+        document.getElementById('placeholderResult').classList.add('d-none');
+        const resCard = document.getElementById('recommendationResultCard');
+        const multiCard = document.getElementById('multiBoxResultCard');
+
+        if (data.recommended_box) {
+            resCard.classList.remove('d-none');
+            multiCard.classList.add('d-none');
+
+            const box = data.recommended_box;
+            document.getElementById('recBoxName').textContent = box.name;
+            document.getElementById('recBoxDetails').textContent =
+                `Code: ${box.code} • Dimensions: ${box.length} x ${box.width} x ${box.height} cm • Max Wt: ${box.max_weight} kg`;
+            document.getElementById('recBoxCost').textContent = `$${box.cost.toFixed(2)}`;
+
+            const volUtil = data.metrics.volume_utilization_percent;
+            const wtUtil = data.metrics.weight_utilization_percent;
+
+            document.getElementById('recVolUtilText').textContent = `${volUtil.toFixed(1)}%`;
+            document.getElementById('recVolUtilBar').style.width = `${Math.min(volUtil, 100)}%`;
+
+            document.getElementById('recWtUtilText').textContent = `${wtUtil.toFixed(1)}%`;
+            document.getElementById('recWtUtilBar').style.width = `${Math.min(wtUtil, 100)}%`;
+
+            // Render 3D Canvas
+            renderInteractiveCanvas(box, data.placements);
+
+            // Render candidates table
+            renderCandidatesTable(data.candidate_evaluations, box.id);
+        } else if (data.status === 'MULTI_BOX_NEEDED') {
+            resCard.classList.add('d-none');
+            multiCard.classList.remove('d-none');
+
+            let html = `
+                <p>This order is too large or heavy for a single box. Recommended multi-box plan:</p>
+                <div class="list-group mb-3">
+            `;
+            data.multi_box_plan.forEach(pkg => {
+                html += `
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between">
+                            <strong>${pkg.box_name}</strong>
+                            <span class="text-success fw-bold">$${pkg.cost.toFixed(2)}</span>
+                        </div>
+                        <div class="small text-muted">Weight: ${pkg.total_weight_kg.toFixed(2)} kg • Volume Util: ${pkg.volume_utilization_percent.toFixed(1)}%</div>
+                        <ul class="small mb-0 mt-1">
+                            ${pkg.items.map(it => `<li>${it.name} (${it.length}x${it.width}x${it.height}cm)</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            });
+            html += `</div><div class="fw-bold text-end">Total Estimated Cost: $${data.multi_box_total_cost.toFixed(2)}</div>`;
+            document.getElementById('multiBoxPlanBody').innerHTML = html;
+        } else {
+            resCard.classList.remove('d-none');
+            multiCard.classList.add('d-none');
+            document.getElementById('recBoxName').textContent = 'No Box Fit';
+            document.getElementById('recBoxDetails').textContent = data.message;
+            document.getElementById('recBoxCost').textContent = 'N/A';
+            renderCandidatesTable(data.candidate_evaluations, null);
+        }
+    }
+
+    function renderCandidatesTable(evaluations, selectedId) {
+        const tbody = document.getElementById('candidatesTableBody');
+        tbody.innerHTML = '';
+
+        evaluations.forEach(ev => {
+            const tr = document.createElement('tr');
+            if (ev.box_id === selectedId) {
+                tr.classList.add('table-success');
+            }
+
+            let badgeHtml = '';
+            if (ev.box_id === selectedId) {
+                badgeHtml = `<span class="badge badge-optimal">Recommended</span>`;
+            } else if (ev.fits) {
+                badgeHtml = `<span class="badge badge-alternative">Eligible Fit</span> <span class="text-muted small">(${ev.volume_utilization.toFixed(1)}%)</span>`;
+            } else {
+                badgeHtml = `<span class="badge badge-rejected">Rejected</span> <div class="text-danger small mt-1" style="font-size: 0.72rem;">${ev.rejection_reason}</div>`;
+            }
+
+            tr.innerHTML = `
+                <td><strong>${ev.box_name}</strong><br><code class="small">${ev.box_code}</code></td>
+                <td>$${ev.box_cost.toFixed(2)}</td>
+                <td>${badgeHtml}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function renderInteractiveCanvas(box, placements) {
+        const canvas = document.getElementById('interactiveCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+
+        ctx.clearRect(0, 0, W, H);
+
+        const originX = W * 0.45;
+        const originY = H * 0.65;
+        const maxDim = Math.max(box.length, box.width, box.height, 1);
+        const scale = 135 / maxDim;
+
+        function project(x, y, z) {
+            const iso = Math.PI / 6;
+            const sx = originX + (x * Math.cos(iso) - y * Math.cos(iso)) * scale;
+            const sy = originY + (x * Math.sin(iso) + y * Math.sin(iso) - z) * scale;
+            return { x: sx, y: sy };
+        }
+
+        const BL = box.length, BW = box.width, BH = box.height;
+        const p000 = project(0, 0, 0);
+        const pL00 = project(BL, 0, 0);
+        const pLw0 = project(BL, BW, 0);
+        const p0w0 = project(0, BW, 0);
+
+        const p00H = project(0, 0, BH);
+        const pL0H = project(BL, 0, BH);
+        const pLwH = project(BL, BW, BH);
+        const p0wH = project(0, BW, BH);
+
+        // Floor
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.moveTo(p000.x, p000.y);
+        ctx.lineTo(pL00.x, pL00.y);
+        ctx.lineTo(pLw0.x, pLw0.y);
+        ctx.lineTo(p0w0.x, p0w0.y);
+        ctx.closePath();
+        ctx.fill();
+
+        const colors = [
+            { top: '#60a5fa', left: '#3b82f6', right: '#2563eb' },
+            { top: '#34d399', left: '#10b981', right: '#059669' },
+            { top: '#fbbf24', left: '#f59e0b', right: '#d97706' },
+            { top: '#a78bfa', left: '#8b5cf6', right: '#7c3aed' },
+            { top: '#f472b6', left: '#ec4899', right: '#db2777' },
+        ];
+
+        placements.forEach((item, idx) => {
+            const c = colors[idx % colors.length];
+            const x = item.x, y = item.y, z = item.z;
+            const dx = item.dx, dy = item.dy, dz = item.dz;
+
+            const c000 = project(x, y, z);
+            const c100 = project(x + dx, y, z);
+            const c110 = project(x + dx, y + dy, z);
+            const c010 = project(x, y + dy, z);
+
+            const c001 = project(x, y, z + dz);
+            const c101 = project(x + dx, y, z + dz);
+            const c111 = project(x + dx, y + dy, z + dz);
+            const c011 = project(x, y + dy, z + dz);
+
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = '#ffffff';
+
+            // Top
+            ctx.fillStyle = c.top;
+            ctx.beginPath();
+            ctx.moveTo(c001.x, c001.y);
+            ctx.lineTo(c101.x, c101.y);
+            ctx.lineTo(c111.x, c111.y);
+            ctx.lineTo(c011.x, c011.y);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Right
+            ctx.fillStyle = c.right;
+            ctx.beginPath();
+            ctx.moveTo(c100.x, c100.y);
+            ctx.lineTo(c110.x, c110.y);
+            ctx.lineTo(c111.x, c111.y);
+            ctx.lineTo(c101.x, c101.y);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Left
+            ctx.fillStyle = c.left;
+            ctx.beginPath();
+            ctx.moveTo(c000.x, c000.y);
+            ctx.lineTo(c100.x, c100.y);
+            ctx.lineTo(c101.x, c101.y);
+            ctx.lineTo(c001.x, c001.y);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        });
+
+        // Box wireframe
+        ctx.strokeStyle = '#334155';
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1.5;
+
+        ctx.beginPath();
+        ctx.moveTo(p00H.x, p00H.y);
+        ctx.lineTo(pL0H.x, pL0H.y);
+        ctx.lineTo(pLwH.x, pLwH.y);
+        ctx.lineTo(p0wH.x, p0wH.y);
+        ctx.closePath();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(pL00.x, pL00.y);
+        ctx.lineTo(pL0H.x, pL0H.y);
+        ctx.moveTo(pLw0.x, pLw0.y);
+        ctx.lineTo(pLwH.x, pLwH.y);
+        ctx.moveTo(p0w0.x, p0w0.y);
+        ctx.lineTo(p0wH.x, p0wH.y);
+        ctx.stroke();
+    }
+
+    // Initialize with a default preset
+    window.addEventListener('load', () => {
+        loadSamplePreset('electronics');
+    });
+</script>
+{% endblock %}

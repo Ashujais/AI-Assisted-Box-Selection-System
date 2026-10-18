@@ -1,0 +1,85 @@
+{% extends 'boxes/base.html' %}
+
+{% block title %}Orders{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="h3 fw-bold mb-1">Customer Orders</h2>
+        <p class="text-muted mb-0">Select an order to view items, calculate box recommendations, or confirm packing.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <div class="btn-group" role="group">
+            <a href="{% url 'boxes:order_list' %}" class="btn btn-outline-secondary {% if not request.GET.status %}active{% endif %}">All</a>
+            <a href="{% url 'boxes:order_list' %}?status=PENDING" class="btn btn-outline-secondary {% if request.GET.status == 'PENDING' %}active{% endif %}">Pending Packing</a>
+            <a href="{% url 'boxes:order_list' %}?status=PACKED" class="btn btn-outline-secondary {% if request.GET.status == 'PACKED' %}active{% endif %}">Packed</a>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Order Number</th>
+                    <th>Customer</th>
+                    <th>Created</th>
+                    <th>Items</th>
+                    <th>Total Weight</th>
+                    <th>Total Volume</th>
+                    <th>Recommended Box</th>
+                    <th>Status</th>
+                    <th class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td class="fw-bold">
+                        <a href="{% url 'boxes:order_detail' order.pk %}" class="text-decoration-none">
+                            {{ order.order_number }}
+                        </a>
+                    </td>
+                    <td>{{ order.customer_name }}</td>
+                    <td class="text-muted small">{{ order.created_at|date:"M d, Y H:i" }}</td>
+                    <td><span class="badge bg-secondary">{{ order.total_quantity }} item{{ order.total_quantity|pluralize }}</span></td>
+                    <td>{{ order.total_weight|floatformat:3 }} kg</td>
+                    <td>{{ order.total_volume|floatformat:1 }} cm³</td>
+                    <td>
+                        {% if order.recommended_box %}
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="badge bg-light text-dark border">
+                                    {{ order.recommended_box.name }}
+                                </span>
+                                <span class="text-success fw-bold small">${{ order.recommended_box.cost }}</span>
+                            </div>
+                        {% else %}
+                            <span class="text-muted small">None</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if order.status == 'PACKED' %}
+                            <span class="badge badge-optimal">Packed</span>
+                        {% else %}
+                            <span class="badge badge-pending">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a href="{% url 'boxes:order_detail' order.pk %}" class="btn btn-sm btn-primary">
+                            <i class="bi bi-box me-1"></i> Inspect & Pack
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center py-5 text-muted">
+                        No orders matching this filter.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
